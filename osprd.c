@@ -121,8 +121,30 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	// 'req->buffer' members, and the rq_data_dir() function.
 
 	// Your code here.
-	eprintk("Should process request...\n");
+	if(req->sector + req->current_nr_sectors > nsectors) {
+		eprintk("Printing to sector that is out of range\n");
+		end_request(req, 0);
+	}
 
+	// Your code here.
+	unsigned request_type;
+	unit8_t *data_ptr;
+
+	request_type = 	rq_data_dir(req);
+	/* d->data is the beginning address of a sector */
+	data_ptr = d->data + (req->sector * SECTOR_SIZE);
+
+	if(request_type == READ) {
+		memcpy((void*) req->buffer, (void*) data_ptr, req->current->nr_sectors * SECTOR_SIZE);
+	}
+	else if (request_type == WRITE) {
+		memcpy((void*) data_ptr, (void*) req->buffer, req->current->nr_sectors * SECTOR_SIZE);
+	}
+	/* not read or write request */
+	else {		
+		eprintk("Neither read nor written\n");
+		end_request(req, 0);
+	}
 	end_request(req, 1);
 }
 
