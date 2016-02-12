@@ -133,7 +133,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	uint8_t *data_ptr;
 
 	request_type = 	rq_data_dir(req);
-	/* d->data is the beginning address of a sector */
+	// d->data is the beginning address of a sector 
 	data_ptr = d->data + (req->sector * SECTOR_SIZE);
 
 	if(request_type == READ) {
@@ -142,12 +142,12 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	else if (request_type == WRITE) {
 		memcpy((void*) data_ptr, (void*) req->buffer, req->current_nr_sectors * SECTOR_SIZE);
 	}
-	/* not read or write request */
+	// not read or write request 
 	else {		
 		eprintk("Neither read nor written\n");
 		end_request(req, 0);
 	}
-	end_request(req, 1);
+	end_request(req, 1); 
 }
 
 
