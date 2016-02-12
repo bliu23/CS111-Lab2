@@ -64,6 +64,8 @@ typedef struct osprd_info {
 
 	/* HINT: You may want to add additional fields to help
 	         in detecting deadlock. */
+	unsigned nread = 0;	// how many processes are holding the read lock
+	unsigned nwrite = 0; // how many processes are holding the write lock
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -128,17 +130,17 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 
 	// Your code here.
 	unsigned request_type;
-	unit8_t *data_ptr;
+	uint8_t *data_ptr;
 
 	request_type = 	rq_data_dir(req);
 	/* d->data is the beginning address of a sector */
 	data_ptr = d->data + (req->sector * SECTOR_SIZE);
 
 	if(request_type == READ) {
-		memcpy((void*) req->buffer, (void*) data_ptr, req->current->nr_sectors * SECTOR_SIZE);
+		memcpy((void*) req->buffer, (void*) data_ptr, req->current_nr_sectors * SECTOR_SIZE);
 	}
 	else if (request_type == WRITE) {
-		memcpy((void*) data_ptr, (void*) req->buffer, req->current->nr_sectors * SECTOR_SIZE);
+		memcpy((void*) data_ptr, (void*) req->buffer, req->current_nr_sectors * SECTOR_SIZE);
 	}
 	/* not read or write request */
 	else {		
@@ -244,8 +246,32 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-		eprintk("Attempting to acquire\n");
-		r = -ENOTTY;
+		if (filp_writable) // attempt to write-lock the ramdisk
+		{
+			// if write-lock, should be the only process holding the lock
+			if (d->nwrite == 0 && d->nread == 0) // write-lock available if no writers or readers
+			{
+				filp->f_flag |= F_OSPRD_LOCKED; // set flag to locked
+				d->nwrite = 1; // set nwrite
+			}
+			else // block it using d->blockq
+			{
+				if (!d->blockq)
+					d->blockq = *filp;
+				else {
+					// add it to the queue? but what about ticket stuff
+				}
+			}
+		}
+		else // attempt to read-lock
+		{
+			if (d->nwrite == 0) // no writers, can read-lock
+			{
+				filp->f_flag |= F_OSPRD_LOCKED;
+				d->nread++; // keep count of how many readers hold lock
+			}
+			// can have as many readers holding the lock
+		}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
