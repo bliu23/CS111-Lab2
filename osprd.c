@@ -135,7 +135,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	//head node
 	if(invalid_tickets->val == 0) {
 		invalid_tickets->val = ticket;
-		invalid_tickets->next = NULL;
+		invalid_tickets->size++;
 		return;
 	}
 
@@ -158,6 +158,12 @@ void add_to_pid_list(node_t *pid_list, unsigned pid) {
 	node_t *itr = pid_list;
 	node_t addMe = (node_t*) malloc(sizeof(*node_t));
 	addMe->val = pid;
+
+	if (pid_list->val == -1) { // head node
+		pid_list->val = pid;
+		pid_list->size++;
+		return;
+	}
 
 	while(itr->next != NULL) {
 		itr = itr->next;
@@ -399,7 +405,7 @@ static void osprd_setup(osprd_info_t *d)
 	d->read_locking_pids = (node_t*) malloc(sizeof(*node_t));
 	d->read_locking_pids->next == NULL;
 	d->read_locking_pids->size = 0;
-	d->read_tickets->val = 0;    //TODO: initialize this properly.
+	d->read_tickets->val = -1;    //TODO: initialize this properly.
 }
 
 
