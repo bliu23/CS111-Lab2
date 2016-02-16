@@ -133,7 +133,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	//iterator
 	node_t *itr = invalid_tickets;
 	//head node
-	if(invalid_tickets->val == 0) {
+	if(invalid_tickets->val == -1) {
 		invalid_tickets->val = ticket;
 		invalid_tickets->size++;
 		return;
@@ -170,7 +170,31 @@ void add_to_pid_list(node_t *pid_list, unsigned pid) {
 	}
 	itr->next = addMe;
 
+
 	pid_list->size++; // keep count of size
+}
+
+unsigned remove_from_list(node_t *node, unsigned value) {
+	node_t *itr = node;
+	//empty list
+	if(node->val == -1) {
+		return NULL;
+	}
+	//TODO: only one in list
+	while(itr!= nullptr) {
+		if(itr->next->val == value) {
+			break;
+		}
+		itr = itr->next;
+	}
+	//not in the list
+	if(itr == nullptr) {
+		return -1;
+	}
+
+	node_t *removeMe = itr->next;
+	itr->next = removeMe->next;
+	free(removeMe);
 }
 
 /*
@@ -395,12 +419,12 @@ static void osprd_setup(osprd_info_t *d)
 
 	d->invalid_tickets = (node_t *) malloc(sizeof (*node_t));
 	d->invalid_tickets->next = NULL;
-	d->invalid_tickets->val = 0;	//TODO: initialize this properly.
+	d->invalid_tickets->val = -1;	//TODO: initialize this properly.
 
 	d->write_locking_pids = (node_t*) malloc(sizeof(*node_t));
 	d->write_locking_pids->next == NULL;
 	d->write_locking_pids->size = 0;
-	d->write_locking_pids->val = 0;    //TODO: initialize this properly.
+	d->write_locking_pids->val = -1;    //TODO: initialize this properly.
 
 	d->read_locking_pids = (node_t*) malloc(sizeof(*node_t));
 	d->read_locking_pids->next == NULL;
