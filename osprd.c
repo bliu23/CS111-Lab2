@@ -147,6 +147,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	node_t addMe = (node_t *) malloc(sizeof (*node_t));
 	itr->next = addMe;
 	itr->next->val = ticket;
+	itr->next->next = NULL;
 
 	invalid_tickets->size++;
 	return;
