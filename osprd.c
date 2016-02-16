@@ -114,7 +114,7 @@ static void for_each_open_file(struct task_struct *task,
 unsigned return_valid_ticket (struct list_head invalid_tickets, unsigned ticket) {
 	struct list_head *ptr;
 	struct ticket_struct *entry;
-	
+
 	list_for_each(ptr, &invalid_tickets) { // for loop iterating through invalid_tickets
 		entry = list_entry(ptr, struct ticket_struct, list)
 		if (entry->ticket_number == ticket)
