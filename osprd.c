@@ -44,6 +44,10 @@ MODULE_AUTHOR("Skeletor");
 static int nsectors = 32;
 module_param(nsectors, int, 0);
 
+typedef struct node {
+	unsigned val;
+	struct node *next;
+} node_t;
 
 /* The internal representation of our device. */
 typedef struct osprd_info {
@@ -67,7 +71,10 @@ typedef struct osprd_info {
 	unsigned nread;	// how many processes are holding the read lock
 	unsigned nwrite; // how many processes are holding the write lock
 
+
 	struct list_head invalid_tickets; // invalid tickets linked list using linux/list.h
+
+	node_t *invalid_tickets;	//linked list for invalid tickets
 	
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -105,18 +112,25 @@ static void for_each_open_file(struct task_struct *task,
 
 
 /* helper function we write ourselves */
-unsigned return_valid_ticket (Node* invalid, unsigned ticket) {
-	while (invalid->next != nullptr)
+unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
+	while (invalid_tickets->next != nullptr)
 	{
-		if (invalid->value == ticket)
-			return return_valid_ticket(invalid, ticket+1);
-		invalid = invalid->next;
+		if (invalid_tickets->value == ticket)
+			return return_valid_ticket(invalid_tickets, ticket+1);
+		invalid_tickets = invalid_tickets->next;
 	}
 	return ticket;
 }
 
-void add_to_ticket_list(, unsigned ticket) {
+/* add tickets to invalid tickets */
+void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
+	node_t *itr = invalid_tickets;
+	//head node
 
+	while(itr->next != nullptr) {
+		itr = itr->next;
+	}
+	itr->val = ticket;
 }
 
 void add_to_pid_list(, ) {
@@ -372,8 +386,11 @@ static void osprd_setup(osprd_info_t *d)
 	d->nread = 0;
 	d->nwrite = 0;
 
-	INIT_LIST_HEAD(&invalid_tickets); // initialize linux linked list
+	d->invalid_tickets = (node_t *) malloc(sizeof (*node_t));
+	d->invalid_tickets->next = nullptr;
+	d->invalid_tickets->val = 0;	//TODO: initialize this properly.
 
+	INIT_LIST_HEAD(&invalid_tickets); // initialize linux linked list
 }
 
 
