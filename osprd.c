@@ -66,6 +66,8 @@ typedef struct osprd_info {
 	         in detecting deadlock. */
 	unsigned nread;	// how many processes are holding the read lock
 	unsigned nwrite; // how many processes are holding the write lock
+
+	struct list_head invalid_tickets; // invalid tickets linked list using linux/list.h
 	
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -103,8 +105,14 @@ static void for_each_open_file(struct task_struct *task,
 
 
 /* helper function we write ourselves */
-unsigned return_valid_ticket () {
-
+unsigned return_valid_ticket (Node* invalid, unsigned ticket) {
+	while (invalid->next != nullptr)
+	{
+		if (invalid->value == ticket)
+			return return_valid_ticket(invalid, ticket+1);
+		invalid = invalid->next;
+	}
+	return ticket;
 }
 
 void add_to_ticket_list(, unsigned ticket) {
@@ -258,7 +266,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
-<<<<<<< HEAD
 		unsigned my_ticket;
 
 		//TODO DEADLOCK DETECTION
@@ -294,7 +301,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		eprintk("Attempting to acquire\n");
 		r = -ENOTTY;
-=======
+
 		if (filp_writable) // attempt to write-lock the ramdisk
 		{
 			// if write-lock, should be the only process holding the lock
@@ -321,7 +328,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			// can have as many readers holding the lock
 		}
->>>>>>> 4ff0fe453a28882f31a12ee6ccc587f7aa78fe94
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
@@ -365,6 +371,8 @@ static void osprd_setup(osprd_info_t *d)
 	/* Add code here if you add fields to osprd_info_t. */
 	d->nread = 0;
 	d->nwrite = 0;
+
+	INIT_LIST_HEAD(&invalid_tickets); // initialize linux linked list
 
 }
 
