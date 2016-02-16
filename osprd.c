@@ -13,7 +13,6 @@
 #include <linux/blkdev.h>
 #include <linux/wait.h>
 #include <linux/file.h>
-#include <linux/list.h>
 
 #include "spinlock.h"
 #include "osprd.h"
@@ -45,6 +44,11 @@ MODULE_AUTHOR("Skeletor");
 static int nsectors = 32;
 module_param(nsectors, int, 0);
 
+typedef struct node {
+	unsigned val;
+	unsigned size;
+	struct node *next;
+} node_t;
 
 /* The internal representation of our device. */
 typedef struct osprd_info {
@@ -68,12 +72,10 @@ typedef struct osprd_info {
 	unsigned nread;	// how many processes are holding the read lock
 	unsigned nwrite; // how many processes are holding the write lock
 
-	struct ticket_struct {
-		struct list_head list; // linked list using linux/list.h
-		unsigned ticket_number;
-	}
 
-	struct list_head invalid_tickets; // invalid tickets linked list using linux/list.h
+	node_t *invalid_tickets;	//linked list for invalid tickets
+	node_t *write_locking_pids;	// linked list for write lock pids
+	node_t *read_locking_pids;  // linked list for read lock pids
 	
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -110,28 +112,42 @@ static void for_each_open_file(struct task_struct *task,
 			       osprd_info_t *user_data);
 
 
-/* helper function we write ourselves */
-unsigned return_valid_ticket (struct list_head invalid_tickets, unsigned ticket) {
-	struct list_head *ptr;
-	struct ticket_struct *entry;
-
-	list_for_each(ptr, &invalid_tickets) { // for loop iterating through invalid_tickets
-		entry = list_entry(ptr, struct ticket_struct, list)
-		if (entry->ticket_number == ticket)
-		{
+/* return a valid ticket to assign to ticket tail */
+unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
+	while (invalid_tickets->next != nullptr)
+	{
+		if (invalid_tickets->value == ticket)
 			return return_valid_ticket(invalid_tickets, ticket+1);
-		}
+		invalid_tickets = invalid_tickets->next;
 	}
 	return ticket;
 }
 
-void add_to_ticket_list(, unsigned ticket) {
+/* add tickets to invalid tickets */
+void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
+	node_t *itr = invalid_tickets;
+	//head node
 
+	while(itr->next != NULL) {
+		itr = itr->next;
+	}
+	itr->val = ticket;
 }
 
-void add_to_pid_list(, ) {
+/* add pid to list of pids with locks */
+void add_to_pid_list(node_t *pid_list, unsigned pid) {
+	node_t *itr = pid_list;
+	node_t addMe = (node_t*) malloc(sizeof(*node_t));
+	addMe->val = pid;
 
+	while(itr->next != NULL) {
+		itr = itr->next;
+	}
+	itr->next = addMe;
+
+	pid_list->size++; // keep count of size
 }
+
 /*
  * osprd_process_request(d, req)
  *   Called when the user reads or writes a sector.
@@ -309,36 +325,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return 0;
 		}
 
-		eprintk("Attempting to acquire\n");
-		r = -ENOTTY;
-
-		if (filp_writable) // attempt to write-lock the ramdisk
-		{
-			// if write-lock, should be the only process holding the lock
-			if (d->nwrite == 0 && d->nread == 0) // write-lock available if no writers or readers
-			{
-				filp->f_flag |= F_OSPRD_LOCKED; // set flag to locked
-				d->nwrite = 1; // set nwrite
-			}
-			else // block it using d->blockq
-			{
-				if (!d->blockq)
-					d->blockq = *filp;
-				else {
-					// add it to the queue? but what about ticket stuff
-				}
-			}
-		}
-		else // attempt to read-lock
-		{
-			if (d->nwrite == 0) // no writers, can read-lock
-			{
-				filp->f_flag |= F_OSPRD_LOCKED;
-				d->nread++; // keep count of how many readers hold lock
-			}
-			// can have as many readers holding the lock
-		}
-
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -382,8 +368,19 @@ static void osprd_setup(osprd_info_t *d)
 	d->nread = 0;
 	d->nwrite = 0;
 
-	INIT_LIST_HEAD(&invalid_tickets); // initialize linux linked list
+	d->invalid_tickets = (node_t *) malloc(sizeof (*node_t));
+	d->invalid_tickets->next = NULL;
+	d->invalid_tickets->val = 0;	//TODO: initialize this properly.
 
+	d->write_locking_pids = (node_t*) malloc(sizeof(*node_t));
+	d->write_locking_pids->next == NULL;
+	d->write_locking_pids->size = 0;
+	d->write_locking_pids->val = 0;    //TODO: initialize this properly.
+
+	d->read_locking_pids = (node_t*) malloc(sizeof(*node_t));
+	d->read_locking_pids->next == NULL;
+	d->read_locking_pids->size = 0;
+	d->read_tickets->val = 0;    //TODO: initialize this properly.
 }
 
 
