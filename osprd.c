@@ -111,7 +111,6 @@ static void for_each_open_file(struct task_struct *task,
 
 
 /* helper function we write ourselves */
-<<<<<<< HEAD
 unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
 	while (invalid_tickets->next != nullptr)
 	{
@@ -124,13 +123,22 @@ unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
 
 /* add tickets to invalid tickets */
 void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
+	//iterator
 	node_t *itr = invalid_tickets;
 	//head node
+	if(invalid_tickets->val == 0) {
+		invalid_tickets->val = ticket;
+		invalid_tickets->next = NULL;
+		return;
+	}
 
 	while(itr->next != nullptr) {
 		itr = itr->next;
 	}
-	itr->val = ticket;
+	//itr->next is a nullptr. create a new node at the end.
+	node_t addMe = (node_t *) malloc(sizeof (*node_t));
+	itr->next = addMe;
+	itr->next->val = ticket;
 }
 
 void add_to_pid_list(, ) {
@@ -387,7 +395,7 @@ static void osprd_setup(osprd_info_t *d)
 	d->nwrite = 0;
 
 	d->invalid_tickets = (node_t *) malloc(sizeof (*node_t));
-	d->invalid_tickets->next = nullptr;
+	d->invalid_tickets->next = NULL;
 	d->invalid_tickets->val = 0;	//TODO: initialize this properly.
 
 	INIT_LIST_HEAD(&invalid_tickets); // initialize linux linked list
