@@ -72,7 +72,6 @@ typedef struct osprd_info {
 	unsigned nread;	// how many processes are holding the read lock
 	unsigned nwrite; // how many processes are holding the write lock
 
-
 	node_t *invalid_tickets;	//linked list for invalid tickets
 	node_t *write_locking_pids;	// linked list for write lock pids
 	node_t *read_locking_pids;  // linked list for read lock pids
@@ -117,6 +116,10 @@ static void for_each_open_file(struct task_struct *task,
 /* return a valid ticket to assign to ticket tail */
 
 unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
+	//none in queue
+	if(invalid_tickets->val == -1) {
+		return ticket;
+	}
 	node_t *itr = invalid_tickets;
 
 	while (itr->next != NULL)
@@ -130,14 +133,15 @@ unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
 
 /* add tickets to invalid tickets */
 void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
-	//iterator
-	node_t *itr = invalid_tickets;
 	//head node
 	if(invalid_tickets->val == -1) {
 		invalid_tickets->val = ticket;
-		invalid_tickets->size++;
+		invalid_tickets->size++;			//TODO: fix this b/c the size is only for the node, not the entire thing. can use a variable and add if this returns true.	
 		return;
 	}
+	//iterator
+	node_t *itr = invalid_tickets;
+	
 
 	while(itr->next != NULL) {
 		itr = itr->next;
@@ -149,7 +153,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	itr->next->val = ticket;
 	itr->next->next = NULL;
 
-	invalid_tickets->size++;
+	invalid_tickets->size++;				//TODO: see the same todo as above.
 	return;
 }
 
@@ -271,7 +275,21 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// as appropriate.
 
 		// Your code here.
+		//set spin lock 
+		osp_spin_lock(&d->mutex);
+		int lock_check = filp->f_flags | F_OSPRD_LOCKED;
+		//if true, it means it is locked.
+		if(filp->f_flags == lock_check) {
+			filp->flags = (filp->flags & (~F_OSPRD_LOCKED)); //gets rid of just osprd_locked flag
+			if (filp_writable) {		//remove from write list
 
+			}
+			else {						//remove from read list
+
+			}
+			wake_up_all(&d->blockq);
+		}
+		osp_spin_unlock(&d->mutex);
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
 
