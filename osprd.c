@@ -13,6 +13,7 @@
 #include <linux/blkdev.h>
 #include <linux/wait.h>
 #include <linux/file.h>
+#include <linux/list.h>
 
 #include "spinlock.h"
 #include "osprd.h"
@@ -67,6 +68,11 @@ typedef struct osprd_info {
 	unsigned nread;	// how many processes are holding the read lock
 	unsigned nwrite; // how many processes are holding the write lock
 
+	struct ticket_struct {
+		struct list_head list; // linked list using linux/list.h
+		unsigned ticket_number;
+	}
+
 	struct list_head invalid_tickets; // invalid tickets linked list using linux/list.h
 	
 	// The following elements are used internally; you don't need
@@ -105,12 +111,16 @@ static void for_each_open_file(struct task_struct *task,
 
 
 /* helper function we write ourselves */
-unsigned return_valid_ticket (Node* invalid, unsigned ticket) {
-	while (invalid->next != nullptr)
-	{
-		if (invalid->value == ticket)
-			return return_valid_ticket(invalid, ticket+1);
-		invalid = invalid->next;
+unsigned return_valid_ticket (struct list_head invalid_tickets, unsigned ticket) {
+	struct list_head *ptr;
+	struct ticket_struct *entry;
+	
+	list_for_each(ptr, &invalid_tickets) { // for loop iterating through invalid_tickets
+		entry = list_entry(ptr, struct ticket_struct, list)
+		if (entry->ticket_number == ticket)
+		{
+			return return_valid_ticket(invalid_tickets, ticket+1);
+		}
 	}
 	return ticket;
 }
