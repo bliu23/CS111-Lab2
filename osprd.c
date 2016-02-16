@@ -65,6 +65,9 @@ typedef struct osprd_info {
 	/* HINT: You may want to add additional fields to help
 	         in detecting deadlock. */
 
+	unsigned nread;
+	unsigned nwrite;
+
 	// The following elements are used internally; you don't need
 	// to understand them.
 	struct request_queue *queue;    // The device request queue.
@@ -100,6 +103,18 @@ static void for_each_open_file(struct task_struct *task,
 			       osprd_info_t *user_data);
 
 
+/* helper function we write ourselves */
+unsigned return_valid_ticket () {
+
+}
+
+void add_to_ticket_list(, unsigned ticket) {
+
+}
+
+void add_to_pid_list(, ) {
+
+}
 /*
  * osprd_process_request(d, req)
  *   Called when the user reads or writes a sector.
@@ -211,10 +226,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// EXERCISE: Lock the ramdisk.
 		//
 		// If *filp is open for writing (filp_writable), then attempt
-		// to write-lock the ramdisk; otherwise attempt to read-lock
+		// to write-lock the ramdisk; otherwise attempt to read-lock	
 		// the ramdisk.
 		//
-                // This lock request must block using 'd->blockq' until:
+        // This lock request must block using 'd->blockq' until:
 		// 1) no other process holds a write lock;
 		// 2) either the request is for a read lock, or no other process
 		//    holds a read lock; and
@@ -244,6 +259,39 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+		unsigned my_ticket;
+
+		//TODO DEADLOCK DETECTION
+		//you just need to check the list in some way
+		osp_spin_lock(&(d->mutex));
+		my_ticket = d->ticket_head;		
+		d->ticket_head++;
+		osp_spin_unlock(&(d->mutex));
+
+		if(filp_writable) {	//write lock 	
+			//returns 0 if condition is true	                
+			if(wait_event_interruptible(d->blockq, d->ticket_tail == my_ticket 		//check if it's ticket tail so we can grant a lock   
+				&& d->write_locking_pids->size == 0  								//write lock size must be 0
+				&& d->reading_locking_pids->size == 0)) {							//read lock size must be 0
+				//we need to decide where to use spinlocks now.
+				//you also only enter here because of a signal...?
+				if(d->ticket_tail==my_ticket) {
+					d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);	//helper function we write by ourselves. ticket tail is invalid. ticket tail +1 may not be.
+					wake_up_all(&(d->blockq));
+
+				}
+				else {	//d->ticket_tail != my_ticket
+					add_to_ticket_list(d->invalid_tickets, my_ticket);
+				}
+				return -ERESTARTSYS;
+			}
+			//wait_event_interruptible returns 0 here
+			filp->f_flags |= F_OSPRD_LOCKED;
+			add_to_pid_list(d->write_locking_pids, current->pid); //helper function
+			d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+			return 0;
+		}
+
 		eprintk("Attempting to acquire\n");
 		r = -ENOTTY;
 
@@ -287,6 +335,9 @@ static void osprd_setup(osprd_info_t *d)
 	osp_spin_lock_init(&d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
+	d->nread = 0;
+	d->nwrite = 0;
+
 }
 
 
