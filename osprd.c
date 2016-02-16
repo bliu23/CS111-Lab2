@@ -114,11 +114,13 @@ static void for_each_open_file(struct task_struct *task,
 
 /* return a valid ticket to assign to ticket tail */
 unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
-	while (invalid_tickets->next != nullptr)
+	node_t *itr = invalid_tickets;
+
+	while (itr->next != NULL)
 	{
-		if (invalid_tickets->value == ticket)
+		if (itr->val == ticket)
 			return return_valid_ticket(invalid_tickets, ticket+1);
-		invalid_tickets = invalid_tickets->next;
+		itr = itr->next;
 	}
 	return ticket;
 }
@@ -132,6 +134,8 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 		itr = itr->next;
 	}
 	itr->val = ticket;
+
+	invalid_tickets->size++;
 }
 
 /* add pid to list of pids with locks */
