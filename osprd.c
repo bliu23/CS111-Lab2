@@ -144,7 +144,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	}
 
 	//itr->next is a nullptr. create a new node at the end.
-	node_t addMe = (node_t *) malloc(sizeof (*node_t));
+	node_t addMe = (node_t *) kmalloc(sizeof (*node_t), GFP_ATOMIC);
 	itr->next = addMe;
 	itr->next->val = ticket;
 	itr->next->next = NULL;
@@ -156,7 +156,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 /* add pid to list of pids with locks */
 void add_to_pid_list(node_t *pid_list, unsigned pid) {
 	node_t *itr = pid_list;
-	node_t addMe = (node_t*) malloc(sizeof(*node_t));
+	node_t addMe = (node_t*) kmalloc(sizeof(*node_t), GFP_ATOMIC);
 	addMe->val = pid;
 
 	if (pid_list->val == -1) { // head node
@@ -371,7 +371,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			filp->f_flags |= F_OSPRD_LOCKED;
 			add_to_pid_list(d->write_locking_pids, current->pid); //helper function
 			d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+			//set write locks
 			return 0;
+		}
+		else {
+
 		}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
@@ -384,6 +388,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
+	
 		eprintk("Attempting to try acquire\n");
 		r = -ENOTTY;
 
@@ -417,16 +422,16 @@ static void osprd_setup(osprd_info_t *d)
 	d->nread = 0;
 	d->nwrite = 0;
 
-	d->invalid_tickets = (node_t *) malloc(sizeof (*node_t));
+	d->invalid_tickets = (node_t *) kmalloc(sizeof (*node_t), GFP_ATOMIC);
 	d->invalid_tickets->next = NULL;
 	d->invalid_tickets->val = -1;	//TODO: initialize this properly.
 
-	d->write_locking_pids = (node_t*) malloc(sizeof(*node_t));
+	d->write_locking_pids = (node_t*) kmalloc(sizeof(*node_t), GFP_ATOMIC);
 	d->write_locking_pids->next == NULL;
 	d->write_locking_pids->size = 0;
 	d->write_locking_pids->val = -1;    //TODO: initialize this properly.
 
-	d->read_locking_pids = (node_t*) malloc(sizeof(*node_t));
+	d->read_locking_pids = (node_t*) kmalloc(sizeof(*node_t), GFP_ATOMIC);
 	d->read_locking_pids->next == NULL;
 	d->read_locking_pids->size = 0;
 	d->read_tickets->val = -1;    //TODO: initialize this properly.
