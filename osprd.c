@@ -178,27 +178,32 @@ void add_to_pid_list(node_t *pid_list, unsigned pid) {
 	pid_list->size++; // keep count of size
 }
 
-unsigned remove_from_list(node_t *node, unsigned value) {
+void remove_from_list(node_t *node, unsigned value) {
 	node_t *itr = node;
 	//empty list
 	if(node->val == -1) {
-		return NULL;
+		return;
 	}
-	//TODO: only one in list
+	//only one in list, set value to -1 to indicate empty.
+	if(node->next == NULL) {
+		node->val = -1;
+		return;
+	}
+
 	while(itr!= nullptr) {
-		if(itr->next->val == value) {
+		if(itr->next != NULL && itr->next->val == value) {
 			break;
 		}
 		itr = itr->next;
 	}
 	//not in the list
 	if(itr == nullptr) {
-		return -1;
+		return;
 	}
 
 	node_t *removeMe = itr->next;
 	itr->next = removeMe->next;
-	free(removeMe);
+	kfree(removeMe);
 }
 
 /*
@@ -276,20 +281,22 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 
 		// Your code here.
 		//set spin lock 
-		osp_spin_lock(&d->mutex);
+		osp_spin_lock(&(d->mutex);
 		int lock_check = filp->f_flags | F_OSPRD_LOCKED;
 		//if true, it means it is locked.
 		if(filp->f_flags == lock_check) {
 			filp->flags = (filp->flags & (~F_OSPRD_LOCKED)); //gets rid of just osprd_locked flag
 			if (filp_writable) {		//remove from write list
-
+				remove_from_list(write_locking_pids, current->pid);	//TODO: current pid?
+				d->nwrite = 0;
 			}
 			else {						//remove from read list
-
+				remove_from_list(d->read_locking_pids, current->); //TODO: current pid?
+				d->nread--;
 			}
 			wake_up_all(&d->blockq);
 		}
-		osp_spin_unlock(&d->mutex);
+		osp_spin_unlock(&(d->mutex));
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
 
@@ -369,31 +376,58 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		osp_spin_unlock(&(d->mutex));
 
 		if(filp_writable) {	//write lock 	
-			//returns 0 if condition is true	                
+			//returns 0 if condition is true
+			//else, block with no value returned.
+			//if it receives a signal wait_event_interruptible returns a non-zero value (if statement true)	                
 			if(wait_event_interruptible(d->blockq, d->ticket_tail == my_ticket 		//check if it's ticket tail so we can grant a lock   
 				&& d->write_locking_pids->size == 0  								//write lock size must be 0
 				&& d->reading_locking_pids->size == 0)) {							//read lock size must be 0
 				//we need to decide where to use spinlocks now.
-				//you also only enter here because of a signal...?
+				//you also only enter here because of a signal
+				osp_spin_lock(&(d->mutex));
 				if(d->ticket_tail==my_ticket) {
 					d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);	//helper function we write by ourselves. ticket tail is invalid. ticket tail +1 may not be.
 					wake_up_all(&(d->blockq));
-
 				}
 				else {	//d->ticket_tail != my_ticket
 					add_to_ticket_list(d->invalid_tickets, my_ticket);
 				}
+				//TODO: do we need to wakeupall if d->ticket_tail != my_ticket?
+				osp_spin_unlock(&(d->mutex));
 				return -ERESTARTSYS;
 			}
+			//valid ticket, acquire writelock
+			osp_spin_lock(&(d->mutex));
 			//wait_event_interruptible returns 0 here
 			filp->f_flags |= F_OSPRD_LOCKED;
 			add_to_pid_list(d->write_locking_pids, current->pid); //helper function
+			d->nwrite++;	//technically we can just use 0 or 1, and dont need a list.
 			d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
-			//set write locks
+			osp_spin_unlock(&(d->mutex));
 			return 0;
 		}
-		else {
-
+		else {	//read lock
+			if(wait_event_interruptible(d->blockq, d->ticket_tail == my_ticket 		//check if it's ticket tail so we can grant a lock   
+				&& d->write_locking_pids->size == 0 )) {							//read lock size must be 0
+				osp_spin_lock(&(d->mutex));
+				if(d->ticket_tail==my_ticket) {
+					d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);	//helper function we write by ourselves. ticket tail is invalid. ticket tail +1 may not be.
+					wake_up_all(&(d->blockq));
+				}
+				else {	//d->ticket_tail != my_ticket
+					add_to_ticket_list(d->invalid_tickets, my_ticket);
+				}
+				osp_spin_UNlock(&(d->mutex));
+				return -ERESTARTSYS;
+			}
+			//wait_event_interruptible returns 0 here
+			osp_spin_lock(&(d->mutex));
+			filp->f_flags |= F_OSPRD_LOCKED;
+			add_to_pid_list(d->read_locking_pids, current->pid); //helper function
+			d->nread++;
+			d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+			osp_spin_unlock(&(d->mutex));
+			return 0;
 		}
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
@@ -406,9 +440,51 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
-	
-		eprintk("Attempting to try acquire\n");
-		r = -ENOTTY;
+		unsigned my_ticket
+
+		osp_spin_lock(&(d->mutex));
+		my_ticket = d->ticket_head;		
+		d->ticket_head++;
+		osp_spin_unlock(&(d->mutex));
+
+		//write lock
+		if(filp_writable) {
+			if(d->ticket_tail != my_ticket 		//check if it's ticket tail so we can grant a lock   
+				|| d->write_locking_pids->size != 0  								//write lock size must be 0
+				|| d->reading_locking_pids->size != 0) {
+				//in this case, instead of blocking and getting here for a signal, we just return ebusy
+				//TODO: update ticket tail??, also spin locks?
+				return -EBUSY;
+			}
+			//in this case, the conditions are valid so we can proceed as regular acquire.
+			osp_spin_lock(&(d->mutex));
+			//wait_event_interruptible returns 0 here
+			filp->f_flags |= F_OSPRD_LOCKED;
+			add_to_pid_list(d->write_locking_pids, current->pid); //helper function
+			d->nwrite++;	//technically we can just use 0 or 1, and dont need a list.
+			d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+			osp_spin_unlock(&(d->mutex));
+		}
+
+		//read lock
+		else {
+			if(d->ticket_tail != my_ticket 		//check if it's ticket tail so we can grant a lock   
+				|| d->write_locking_pids->size != 0) {
+				//in this case, instead of blocking and getting here for a signal, we just return ebusy
+				//TODO: update ticket tail??, also spin locks?
+				return -EBUSY;
+			}
+			//in this case, the conditions are valid so we can proceed as regular acquire.
+			osp_spin_lock(&(d->mutex));
+			//wait_event_interruptible returns 0 here
+			filp->f_flags |= F_OSPRD_LOCKED;
+			add_to_pid_list(d->read_locking_pids, current->pid); //helper function
+			d->nread++;	//technically we can just use 0 or 1, and dont need a list.
+			d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+			osp_spin_unlock(&(d->mutex));
+		}
+
+
 
 	} else if (cmd == OSPRDIOCRELEASE) {
 
@@ -433,8 +509,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 static void osprd_setup(osprd_info_t *d)
 {
 	/* Initialize the wait queue. */
-	init_waitqueue_head(&d->blockq);
-	osp_spin_lock_init(&d->mutex);
+	init_waitqueue_head(&(d->blockq);
+	osp_spin_lock_init(&(d->mutex);
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
 	d->nread = 0;
