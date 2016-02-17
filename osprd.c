@@ -117,10 +117,11 @@ static void for_each_open_file(struct task_struct *task,
 
 unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
 	//none in queue
+	node_t *itr;
 	if(invalid_tickets->val == -1) {
 		return ticket;
 	}
-	node_t *itr = invalid_tickets;
+	itr = invalid_tickets;
 
 	while (itr->next != NULL)
 	{
@@ -134,13 +135,15 @@ unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
 /* add tickets to invalid tickets */
 void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	//head node
+	node_t *itr;
+	node_t *addMe;
 	if(invalid_tickets->val == -1) {
 		invalid_tickets->val = ticket;
 		invalid_tickets->size++;			//TODO: fix this b/c the size is only for the node, not the entire thing. can use a variable and add if this returns true.	
 		return;
 	}
 	//iterator
-	node_t *itr = invalid_tickets;
+	itr = invalid_tickets;
 	
 
 	while(itr->next != NULL) {
@@ -148,7 +151,7 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	}
 
 	//itr->next is a nullptr. create a new node at the end.
-	node_t addMe = (node_t *) kmalloc(sizeof (*node_t), GFP_ATOMIC);
+	addMe = (node_t *) kmalloc(sizeof (node_t*), GFP_ATOMIC);
 	itr->next = addMe;
 	itr->next->val = ticket;
 	itr->next->next = NULL;
@@ -159,8 +162,12 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 
 /* add pid to list of pids with locks */
 void add_to_pid_list(node_t *pid_list, unsigned pid) {
-	node_t *itr = pid_list;
-	node_t addMe = (node_t*) kmalloc(sizeof(*node_t), GFP_ATOMIC);
+	//declare vars
+	node_t *itr;
+	node_t *addMe;
+
+	itr = pid_list;
+	addMe = (node_t*) kmalloc(sizeof(node_t*), GFP_ATOMIC);
 	addMe->val = pid;
 
 	if (pid_list->val == -1) { // head node
@@ -180,6 +187,7 @@ void add_to_pid_list(node_t *pid_list, unsigned pid) {
 
 void remove_from_list(node_t *node, unsigned value) {
 	node_t *itr = node;
+	node_t *removeMe;
 	//empty list
 	if(node->val == -1) {
 		return;
@@ -190,18 +198,18 @@ void remove_from_list(node_t *node, unsigned value) {
 		return;
 	}
 
-	while(itr!= nullptr) {
+	while(itr!= NULL) {
 		if(itr->next != NULL && itr->next->val == value) {
 			break;
 		}
 		itr = itr->next;
 	}
 	//not in the list
-	if(itr == nullptr) {
+	if(itr == NULL) {
 		return;
 	}
 
-	node_t *removeMe = itr->next;
+	removeMe = itr->next;
 	itr->next = removeMe->next;
 	kfree(removeMe);
 }
@@ -213,6 +221,10 @@ void remove_from_list(node_t *node, unsigned value) {
  */
 static void osprd_process_request(osprd_info_t *d, struct request *req)
 {
+	//declare vars
+	unsigned request_type;
+	uint8_t *data_ptr;
+
 	if (!blk_fs_request(req)) {
 		end_request(req, 0);
 		return;
@@ -233,8 +245,7 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	}
 
 	// Your code here.
-	unsigned request_type;
-	uint8_t *data_ptr;
+	//vars declared above.
 
 	request_type = 	rq_data_dir(req);
 	// d->data is the beginning address of a sector 
@@ -271,6 +282,9 @@ static int osprd_open(struct inode *inode, struct file *filp)
 // last copy is closed.)
 static int osprd_close_last(struct inode *inode, struct file *filp)
 {
+	//declare vars
+	int lock_check;
+
 	if (filp) {
 		osprd_info_t *d = file2osprd(filp);
 		int filp_writable = filp->f_mode & FMODE_WRITE;
@@ -281,17 +295,17 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 
 		// Your code here.
 		//set spin lock 
-		osp_spin_lock(&(d->mutex);
-		int lock_check = filp->f_flags | F_OSPRD_LOCKED;
+		osp_spin_lock(&(d->mutex));
+		lock_check = (filp->f_flags | F_OSPRD_LOCKED);
 		//if true, it means it is locked.
 		if(filp->f_flags == lock_check) {
-			filp->flags = (filp->flags & (~F_OSPRD_LOCKED)); //gets rid of just osprd_locked flag
+			filp->f_flags = (filp->f_flags & (~F_OSPRD_LOCKED)); //gets rid of just osprd_locked flag
 			if (filp_writable) {		//remove from write list
-				remove_from_list(write_locking_pids, current->pid);	//TODO: current pid?
+				remove_from_list(d->write_locking_pids, current->pid);	//TODO: current pid?
 				d->nwrite = 0;
 			}
 			else {						//remove from read list
-				remove_from_list(d->read_locking_pids, current->); //TODO: current pid?
+				remove_from_list(d->read_locking_pids, current->pid); //TODO: current pid?
 				d->nread--;
 			}
 			wake_up_all(&d->blockq);
@@ -381,7 +395,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			//if it receives a signal wait_event_interruptible returns a non-zero value (if statement true)	                
 			if(wait_event_interruptible(d->blockq, d->ticket_tail == my_ticket 		//check if it's ticket tail so we can grant a lock   
 				&& d->write_locking_pids->size == 0  								//write lock size must be 0
-				&& d->reading_locking_pids->size == 0)) {							//read lock size must be 0
+				&& d->read_locking_pids->size == 0)) {							//read lock size must be 0
 				//we need to decide where to use spinlocks now.
 				//you also only enter here because of a signal
 				osp_spin_lock(&(d->mutex));
@@ -417,7 +431,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				else {	//d->ticket_tail != my_ticket
 					add_to_ticket_list(d->invalid_tickets, my_ticket);
 				}
-				osp_spin_UNlock(&(d->mutex));
+				osp_spin_unlock(&(d->mutex));
 				return -ERESTARTSYS;
 			}
 			//wait_event_interruptible returns 0 here
@@ -440,7 +454,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Otherwise, if we can grant the lock request, return 0.
 
 		// Your code here (instead of the next two lines).
-		unsigned my_ticket
+		unsigned my_ticket;
 
 		osp_spin_lock(&(d->mutex));
 		my_ticket = d->ticket_head;		
@@ -451,7 +465,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		if(filp_writable) {
 			if(d->ticket_tail != my_ticket 		//check if it's ticket tail so we can grant a lock   
 				|| d->write_locking_pids->size != 0  								//write lock size must be 0
-				|| d->reading_locking_pids->size != 0) {
+				|| d->read_locking_pids->size != 0) {
 				//in this case, instead of blocking and getting here for a signal, we just return ebusy
 				//TODO: update ticket tail??, also spin locks?
 				return -EBUSY;
@@ -509,26 +523,26 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 static void osprd_setup(osprd_info_t *d)
 {
 	/* Initialize the wait queue. */
-	init_waitqueue_head(&(d->blockq);
-	osp_spin_lock_init(&(d->mutex);
+	init_waitqueue_head(&(d->blockq));
+	osp_spin_lock_init(&(d->mutex));
 	d->ticket_head = d->ticket_tail = 0;
 	/* Add code here if you add fields to osprd_info_t. */
 	d->nread = 0;
 	d->nwrite = 0;
 
-	d->invalid_tickets = (node_t *) kmalloc(sizeof (*node_t), GFP_ATOMIC);
-	d->invalid_tickets->next = NULL;
+	d->invalid_tickets = (node_t *) kmalloc(sizeof (node_t*), GFP_ATOMIC);
+	//d->invalid_tickets->next = NULL;	//next is already null
 	d->invalid_tickets->val = -1;	//TODO: initialize this properly.
 
-	d->write_locking_pids = (node_t*) kmalloc(sizeof(*node_t), GFP_ATOMIC);
-	d->write_locking_pids->next == NULL;
+	d->write_locking_pids = (node_t*) kmalloc(sizeof(node_t*), GFP_ATOMIC);
+	//d->write_locking_pids->next == NULL;
 	d->write_locking_pids->size = 0;
 	d->write_locking_pids->val = -1;    //TODO: initialize this properly.
 
-	d->read_locking_pids = (node_t*) kmalloc(sizeof(*node_t), GFP_ATOMIC);
-	d->read_locking_pids->next == NULL;
+	d->read_locking_pids = (node_t*) kmalloc(sizeof(node_t*), GFP_ATOMIC);
+	//d->read_locking_pids->next == NULL;
 	d->read_locking_pids->size = 0;
-	d->read_tickets->val = -1;    //TODO: initialize this properly.
+	d->read_locking_pids->val = -1;    //TODO: initialize this properly.
 }
 
 
