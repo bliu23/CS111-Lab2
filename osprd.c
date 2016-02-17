@@ -143,11 +143,6 @@ void add_to_ticket_list(node_t *invalid_tickets, unsigned ticket) {
 	}
 	//iterator
 	itr = invalid_tickets;
-	
-	//only one present
-	if(itr->next == NULL) {
-
-	}
 
 	while(itr->next != NULL) {
 		itr = itr->next;
@@ -378,30 +373,24 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		// Your code here (instead of the next two lines).
 		unsigned my_ticket;
-
+		node_t *itr;
+		itr = d->read_locking_pids;
 		//TODO DEADLOCK DETECTION
 		//you just need to check the list in some way
 		osp_spin_lock(&(d->mutex));
 		//I think we check for deadlock here:
-
-		/*
-there are 4 conditions for deadlock:
-circular wait: threads waiting for each other.
-mutual exclusion, at most 1 thread can access something at any time
-no lock preemption. no lock preemption is that: if someone has a lock, you can’t steal it from them. aka cant kill a process and continue.
-hold and wait: hold a lock on one object while waiting on another. 
-if you have all these things, then you can have deadlock.
-
-solutions:
-look for loops and dynamically (when it discovers that a cycle is to be created) says nope and acquire fails. now all acquires will have a test around it, and do something reasonable if the test fails. complicates when you try to acquire a lock.
-coarser lock for combined operations. one lock for all types. problem is then you’ll have more bottlenecks.
-lock order. 
-
-We can't prevent lock preemption.
-If one thread has a write lock and another tries to acquire it we can just report a deadlock.
-		*/
-
-		my_ticket = d->ticket_head;		
+		if(current->pid == d->write_locking_pids->val) {
+			osp_spin_unlock(&(d->mutex));
+			return -EDEADLK;
+		}
+		while (itr != NULL) {
+			if(current->pid == itr->val) {
+				osp_spin_unlock(&(d->mutex));
+				return -EDEADLK;
+			}
+			itr=itr->next;
+		}
+		my_ticket = d->ticket_head;
 		d->ticket_head++;
 		osp_spin_unlock(&(d->mutex));
 
@@ -463,6 +452,7 @@ If one thread has a write lock and another tries to acquire it we can just repor
 			return 0;
 		}
 
+
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -486,7 +476,9 @@ If one thread has a write lock and another tries to acquire it we can just repor
 				|| d->nwrite != 0  								//write lock size must be 0
 				|| d->nread != 0) {
 				//in this case, instead of blocking and getting here for a signal, we just return ebusy
-				//TODO: update ticket tail??, also spin locks?
+				osp_spin_lock(&(d->mutex));
+				d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+				osp_spin_unlock(&(d->mutex));
 				return -EBUSY;
 			}
 			//in this case, the conditions are valid so we can proceed as regular acquire.
@@ -503,7 +495,9 @@ If one thread has a write lock and another tries to acquire it we can just repor
 			if(d->ticket_tail != my_ticket 		//check if it's ticket tail so we can grant a lock   
 				|| d->nwrite != 0) {
 				//in this case, instead of blocking and getting here for a signal, we just return ebusy
-				//TODO: update ticket tail??, also spin locks?
+				osp_spin_lock(&(d->mutex));
+				d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
+				osp_spin_unlock(&(d->mutex));
 				return -EBUSY;
 			}
 			//in this case, the conditions are valid so we can proceed as regular acquire.
