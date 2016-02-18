@@ -122,7 +122,7 @@ unsigned return_valid_ticket (node_t* invalid_tickets, unsigned ticket) {
 	}
 	itr = invalid_tickets;
 
-	while (itr->next != NULL)
+	while (itr != NULL)
 	{
 		if (itr->val == ticket)
 			return return_valid_ticket(invalid_tickets, ticket+1);
@@ -384,14 +384,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		osp_spin_lock(&(d->mutex));
 		//I think we check for deadlock here:
 		if(current->pid == d->write_locking_pids->val) {
-			eprintk("Deadlock, returning -EDEADLK\n");
 			osp_spin_unlock(&(d->mutex));
 			return -EDEADLK;
 		}
 		while (itr != NULL) {
 			if(current->pid == itr->val) {
 				osp_spin_unlock(&(d->mutex));
-				eprintk("Deadlock, returning -EDEADLK\n");
 				return -EDEADLK;
 			}
 			itr=itr->next;
