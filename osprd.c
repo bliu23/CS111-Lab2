@@ -255,7 +255,6 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	}
 	// not read or write request 
 	else {		
-		eprintk("Neither read nor written\n");
 		end_request(req, 0);
 	}
 	end_request(req, 1); 
@@ -337,7 +336,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 	(void) filp_writable, (void) d;
 
 	// Set 'r' to the ioctl's return value: 0 on success, negative on error
-	eprintk("ticket_head:%d, ticket_tail:%d\n", d->ticket_head, d->ticket_tail);
 	if (cmd == OSPRDIOCACQUIRE) {
 
 		// EXERCISE: Lock the ramdisk.
@@ -483,7 +481,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_lock(&(d->mutex));
 				d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
 				osp_spin_unlock(&(d->mutex));
-				eprintk("ticket_head:%d, ticket_tail:%d\n", d->ticket_head, d->ticket_tail);	
 				return -EBUSY;
 			}
 			//in this case, the conditions are valid so we can proceed as regular acquire.
@@ -504,7 +501,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_lock(&(d->mutex));
 				d->ticket_tail = return_valid_ticket(d->invalid_tickets, d->ticket_tail+1);
 				osp_spin_unlock(&(d->mutex));
-				eprintk("ticket_head:%d, ticket_tail:%d\n", d->ticket_head, d->ticket_tail);
 				return -EBUSY;
 			}
 			//in this case, the conditions are valid so we can proceed as regular acquire.
@@ -516,10 +512,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			osp_spin_unlock(&(d->mutex));
 			return 0;
 		}
-		eprintk("ticket_head:%d, ticket_tail:%d\n", d->ticket_head, d->ticket_tail);
-
-
-
+		
 	} else if (cmd == OSPRDIOCRELEASE) {
 
 		// EXERCISE: Unlock the ramdisk.
